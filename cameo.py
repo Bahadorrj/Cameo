@@ -2,32 +2,22 @@ import sys
 import threading
 
 import cv2
-from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QApplication
 
 from manager import CaptureManager, WindowManager
 
 
 class Cameo(object):
     def __init__(self):
-        self.exit = False
         self.windowManager = WindowManager('Cameo', self.onKeypress)
-        self.windowManager.windowClosed.connect(self.quit)
         self.captureManager = CaptureManager(cv2.VideoCapture(0), self.windowManager, True)
-        self.windowManager.show()
 
     def run(self):
         """Run the main loop."""
-        while not self.exit:
+        while not self.windowManager.isClosed:
             self.captureManager.enterFrame()
-            frame = self.captureManager.frame
-            if frame is not None:
-                # TODO: Filter the frame (Chapter 3).
-                pass
             self.captureManager.exitFrame()
-
-    def quit(self):
-        self.exit = True
 
     def onKeypress(self, keycode):
         """Handle a keypress.
@@ -52,5 +42,6 @@ class Cameo(object):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     cameo = Cameo()
+    cameo.windowManager.show()
     threading.Thread(target=cameo.run).start()
     sys.exit(app.exec())

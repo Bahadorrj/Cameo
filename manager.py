@@ -1,10 +1,12 @@
 import time
-
+import filters
+import utils
 import cv2
+from functools import partial
 
-from PyQt5.QtCore import QSize, pyqtSignal, Qt
+from PyQt5.QtCore import QSize, Qt
 from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtWidgets import QMainWindow, QLabel, QFrame, QStatusBar
+from PyQt5.QtWidgets import QMainWindow, QLabel, QFrame, QStatusBar, QMenu, QAction
 
 
 class CaptureManager(object):
@@ -22,6 +24,7 @@ class CaptureManager(object):
         self._startTime = None
         self._framesElapsed = 0
         self._fpsEstimate = None
+        self.filter = None
 
     @property
     def channel(self):
@@ -117,24 +120,41 @@ class CaptureManager(object):
 
 
 class WindowManager(QMainWindow):
-    windowClosed = pyqtSignal()
-
     def __init__(self, windowName, keypressCallback=None):
         super().__init__()
+        self.isClosed = False
         self.keypressCallback = keypressCallback
         self.setWindowTitle(windowName)
         self.setMinimumSize(QSize(640, 480))
         self._media = QLabel(self)
         self._media.setFrameShape(QFrame.Shape.Box)
-        self.setCentralWidget(self._media)
+        # self.actionsMap = dict()
+        self._createMenusAndActions()
         self._statusbar = QStatusBar(self)
         self.setStatusBar(self._statusbar)
+        self.setCentralWidget(self._media)
+        self._filter = None
+
+    def _createMenusAndActions(self):
+        menuBar = self.menuBar()
+        filterMenu = menuBar.addMenu('&Filters')
+        for imageFilter in utils.getAllClassesNameFrom('filters')[1:]:
+            action = filterMenu.addAction(imageFilter)
+            action.triggered.connect(partial(self._filterApplied, imageFilter))
+            # self.actionsMap[imageFilter] = action
+
+    def _filterApplied(self, imageFilter):
+        self._filter = utils.instantiateClass('filters', imageFilter)()
 
     def displayContent(self, content, shouldMirrorPreview):
         # Convert numpy array to QImage
         height, width, channels = content.shape
         bytes_per_line = channels * width
         image = QImage(content.data, width, height, bytes_per_line, QImage.Format_BGR888)
+
+        if self._filter is not None:
+            filters.strokeEdges(content, content)
+            self._filter.apply(content, content)
 
         if shouldMirrorPreview:
             image = image.mirrored(horizontal=True, vertical=False)
@@ -153,4 +173,4 @@ class WindowManager(QMainWindow):
         self.keypressCallback(keycode)
 
     def closeEvent(self, a0):
-        self.windowClosed.emit()
+        self.isClosed = True
